@@ -14,6 +14,11 @@ bpy.types.Scene.mol_import_map_invert = bpy.props.BoolProperty(
     description = "Invert the values in the map. Low becomes high, high becomes low.",
     default = False
     )
+bpy.types.Scene.mol_import_map_mask_negative = bpy.props.BoolProperty(
+    name = "mol_import_map_mask_negative", 
+    description = "Set negative values to 0.",
+    default = False
+    )
 bpy.types.Scene.mol_import_map = bpy.props.StringProperty(
     name = 'path_map', 
     description = 'File path for the map file.', 
@@ -23,7 +28,7 @@ bpy.types.Scene.mol_import_map = bpy.props.StringProperty(
     maxlen = 0
     )
 
-def map_to_grid(file: str, invert: bool = False):
+def map_to_grid(file: str, invert: bool = False, mask_negative: bool = False):
     """Reads an MRC file and converts it into a pyopenvdb FloatGrid object.
 
     This function reads a file in MRC format, and converts it into a pyopenvdb FloatGrid object,
@@ -44,8 +49,13 @@ def map_to_grid(file: str, invert: bool = False):
     
     dataType = volume.dtype
     
-    # enables different grid types
+    if invert:
+        volume = np.max(volume) - volume
     
+    if mask_negative:
+        volume[volume < 0] = 0
+    
+    # enables different grid types
     if dataType == "float32" or dataType == "float64":
         grid = vdb.FloatGrid()
     elif dataType == "int8" or dataType == "int16" or dataType == "int32":
@@ -54,9 +64,7 @@ def map_to_grid(file: str, invert: bool = False):
     elif dataType == "int64":
         grid = vdb.Int64Grid()
 
-    if invert:
-        volume = np.max(volume) - volume
-    
+    # attempt to create the vdb grid from the 3D array
     try:
         grid.copyFromArray(volume)
     except ValueError:
@@ -75,7 +83,13 @@ def path_to_vdb(file: str):
     return file_path
     
 
-def map_to_vdb(file: str, invert: bool = False, world_scale=0.01, overwrite=False) -> str:
+def map_to_vdb(
+    file: str, 
+    invert: bool = False, 
+    mask_negative: bool = False,
+    world_scale = 0.01, 
+    overwrite = False
+    ) -> str:
     """
     Converts an MRC file to a .vdb file using pyopenvdb.
 
@@ -99,7 +113,7 @@ def map_to_vdb(file: str, invert: bool = False, world_scale=0.01, overwrite=Fals
         return file_path
 
     # Read in the MRC file and convert it to a pyopenvdb grid
-    grid = map_to_grid(file, invert = invert)
+    grid = map_to_grid(file, mask_negative = mask_negative, invert = invert)
     
     # Read the voxel size from the MRC file and convert it to a numpy array
     with mrcfile.open(file) as mrc:
@@ -140,7 +154,13 @@ def vdb_to_volume(file: str) -> bpy.types.Object:
     return vol
 
 
-def load(file: str, name: str = None, invert: bool = False, world_scale: float = 0.01) -> bpy.types.Object:
+def load(
+    file: str, 
+    name: str = None, 
+    invert: bool = False, 
+    mask_negative: bool = False, 
+    world_scale: float = 0.01
+    ) -> bpy.types.Object:
     """
     Loads an MRC file into Blender as a volumetric object.
 
@@ -155,7 +175,12 @@ def load(file: str, name: str = None, invert: bool = False, world_scale: float =
         bpy.types.Object: The loaded volumetric object.
     """
     # Convert MRC file to VDB format
-    vdb_file = map_to_vdb(file, invert = invert, world_scale = world_scale)
+    vdb_file = map_to_vdb(
+        file = file, 
+        invert = invert, 
+        mask_negative = mask_negative,
+        world_scale = world_scale
+        )
     
     # Import VDB file into Blender
     vol_object = vdb_to_volume(vdb_file)
@@ -180,9 +205,11 @@ class MOL_OT_Import_Map(bpy.types.Operator):
         map_file = bpy.context.scene.mol_import_map
         invert = bpy.context.scene.mol_import_map_invert
         setup_node_tree = bpy.context.scene.mol_import_map_nodes
+        mask_negative = True # bpy.context.scene.mol_import_map_mask_negative
         
         vol = load(
             file = map_file, 
+            mask_negative = mask_negative,
             invert = invert
             )
         if setup_node_tree:
@@ -199,6 +226,10 @@ def panel(layout_function, scene):
                   )
     row.prop(bpy.context.scene, 'mol_import_map_invert', 
              text = 'Invert Data', 
+             emboss = True
+            )
+    row.prop(bpy.context.scene, 'mol_import_map_mask_negative', 
+             text = 'Mask Negative', 
              emboss = True
             )
     
