@@ -416,7 +416,7 @@ class MOL_OT_Install_Package(bpy.types.Operator):
     def execute(self, context):
         installable = f"{self.package}=={self.version}"
         result = install_package(package=installable,
-                                 pypi_mirror_provider=bpy.context.scene.pypi_mirror_provider)
+                                 pypi_mirror_provider=context.scene.pypi_mirror_provider)
         if result.returncode == 0 and is_current(self.package):
             self.report(
                 {'INFO'}, 

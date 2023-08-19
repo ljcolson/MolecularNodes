@@ -409,9 +409,9 @@ def create_molecule(mol_array,
 
     mol_object = obj.create_object(
         name = mol_name, 
-        collection = collection, 
         locations = locations, 
-        bonds = bond_idx
+        edges = bond_idx,
+        collection = collection
         )
     
 
@@ -615,8 +615,8 @@ def create_molecule(mol_array,
         for i, frame in enumerate(mol_frames):
             obj_frame = obj.create_object(
                 name = mol_object.name + '_frame_' + str(i), 
-                collection=coll_frames, 
-                locations= frame.coord * world_scale - centroid
+                locations = frame.coord * world_scale - centroid,
+                collection = coll_frames
             )
             if b_factors:
                 try:

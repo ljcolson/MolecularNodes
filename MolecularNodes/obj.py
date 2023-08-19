@@ -1,7 +1,7 @@
 import bpy
 import numpy as np
 
-def create_object(name: str, collection: bpy.types.Collection, locations, bonds=[]) -> bpy.types.Object:
+def create_object(name: str, locations, edges=[], faces = [], collection: bpy.types.Collection = None) -> bpy.types.Object:
     """
     Create a mesh with the given name in the given collection, using the supplied
     vertex locations and, if provided, bonds as edges.
@@ -34,19 +34,27 @@ def create_object(name: str, collection: bpy.types.Collection, locations, bonds=
     Example
     -------
     ```python
-    # Create a mesh object named "MyMesh" in the collection "MyCollection"
     # with vertex locations and bond edges.
     locations = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]]
     bonds = [(0, 1), (1, 2), (2, 0)]
-    my_object = create_object("MyMesh", bpy.data.collections['Collection'], locations, bonds)
+    my_object = create_object("MyMesh", locations, bonds)
     ```
     """
     # create a new mesh
-    mol_mesh = bpy.data.meshes.new(name)
-    mol_mesh.from_pydata(locations, bonds, faces=[])
-    mol_object = bpy.data.objects.new(name, mol_mesh)
-    collection.objects.link(mol_object)
-    return mol_object
+    if not collection:
+        collection = bpy.context.scene.collection
+    
+    # the mesh of an object has to be created first
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(locations, edges, faces)
+    
+    # an object can be created, but only from an existing mesh
+    # the object won't show up unles linked to a collection
+    object = bpy.data.objects.new(name, mesh)
+    
+    # the object has to be linked to a collection to appear inside of Blender
+    collection.objects.link(object)
+    return object
 
 
 def add_attribute(object: bpy.types.Object, name: str, data, type="FLOAT", domain="POINT"):

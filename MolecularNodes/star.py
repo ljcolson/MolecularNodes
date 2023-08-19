@@ -88,7 +88,7 @@ def load_star_file(
                                source_meta='relion', 
                                target_meta=target_metadata))
 
-    obj = create_object(obj_name, coll.mn(), xyz * world_scale)
+    obj = create_object(obj_name, xyz * world_scale, collection = coll.mn())
 
     # create the attribute and add the data for the rotations
     add_attribute(obj, 'MOLRotation', eulers, 'FLOAT_VECTOR', 'POINT')
@@ -121,12 +121,12 @@ def panel(layout_function, scene):
     col_main.label(text = "Import Star File")
     row_import = col_main.row()
     row_import.prop(
-        bpy.context.scene, 'mol_import_star_file_name', 
+        scene, 'mol_import_star_file_name', 
         text = 'Name', 
         emboss = True
     )
     col_main.prop(
-        bpy.context.scene, 'mol_import_star_file_path', 
+        scene, 'mol_import_star_file_path', 
         text = '.star File Path', 
         emboss = True
     )
@@ -146,8 +146,8 @@ class MOL_OT_Import_Star_File(bpy.types.Operator):
 
     def execute(self, context):
         load_star_file(
-            file_path = bpy.context.scene.mol_import_star_file_path, 
-            obj_name = bpy.context.scene.mol_import_star_file_name, 
+            file_path = context.scene.mol_import_star_file_path, 
+            obj_name = context.scene.mol_import_star_file_name, 
             node_tree = True
         )
         return {"FINISHED"}

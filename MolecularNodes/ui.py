@@ -3,12 +3,9 @@ from . import nodes
 from . import pkg
 from . import load
 from . import md
-from . import assembly
 from . import density
 from . import star
 from . import esmfold
-from . import density
-import os
 
 # operator that calls the function to import the structure from the PDB
 class MOL_OT_Import_Protein_RCSB(bpy.types.Operator):
@@ -22,18 +19,18 @@ class MOL_OT_Import_Protein_RCSB(bpy.types.Operator):
         return not False
 
     def execute(self, context):
-        pdb_code = bpy.context.scene.mol_pdb_code
+        pdb_code = context.scene.mol_pdb_code
         
         mol_object = load.molecule_rcsb(
             pdb_code=pdb_code,
-            center_molecule=bpy.context.scene.mol_import_center, 
-            del_solvent=bpy.context.scene.mol_import_del_solvent,
-            include_bonds=bpy.context.scene.mol_import_include_bonds,
-            starting_style=bpy.context.scene.mol_import_default_style,
-            cache_dir=bpy.context.scene.mol_cache_dir
+            center_molecule=context.scene.mol_import_center, 
+            del_solvent=context.scene.mol_import_del_solvent,
+            include_bonds=context.scene.mol_import_include_bonds,
+            starting_style=context.scene.mol_import_default_style,
+            cache_dir=context.scene.mol_cache_dir
         )
         
-        bpy.context.view_layer.objects.active = mol_object
+        context.view_layer.objects.active = mol_object
         self.report({'INFO'}, message=f"Imported '{pdb_code}' as {mol_object.name}")
         
         return {"FINISHED"}
@@ -54,20 +51,20 @@ class MOL_OT_Import_Protein_Local(bpy.types.Operator):
         return not False
 
     def execute(self, context):
-        file_path = bpy.context.scene.mol_import_local_path
+        file_path = context.scene.mol_import_local_path
         
         mol_object = load.molecule_local(
             file_path=file_path, 
-            mol_name=bpy.context.scene.mol_import_local_name,
-            include_bonds=bpy.context.scene.mol_import_include_bonds, 
-            center_molecule=bpy.context.scene.mol_import_center, 
-            del_solvent=bpy.context.scene.mol_import_del_solvent, 
-            default_style=bpy.context.scene.mol_import_default_style, 
+            mol_name=context.scene.mol_import_local_name,
+            include_bonds=context.scene.mol_import_include_bonds, 
+            center_molecule=context.scene.mol_import_center, 
+            del_solvent=context.scene.mol_import_del_solvent, 
+            default_style=context.scene.mol_import_default_style, 
             setup_nodes=True
             )
         
         # return the good news!
-        bpy.context.view_layer.objects.active = mol_object
+        context.view_layer.objects.active = mol_object
         self.report({'INFO'}, message=f"Imported '{file_path}' as {mol_object.name}")
         return {"FINISHED"}
 
@@ -76,7 +73,7 @@ class MOL_OT_Import_Protein_Local(bpy.types.Operator):
 
 
 
-def MOL_PT_panel_rcsb(layout_function, ):
+def panel_rcsb(layout_function, scene):
     col_main = layout_function.column(heading = '', align = False)
     col_main.alert = False
     col_main.enabled = True
@@ -87,29 +84,26 @@ def MOL_PT_panel_rcsb(layout_function, ):
     col_main.scale_y = 1.0
     col_main.alignment = 'Expand'.upper()
     col_main.label(text = "Download from PDB")
-    col_main.prop(
-        bpy.context.scene,
-        'mol_cache_dir',
-        text = 'Cache dir')
+    col_main.prop(scene, 'mol_cache_dir', text = 'Cache dir')
     row_import = col_main.row()
-    row_import.prop(bpy.context.scene, 'mol_pdb_code', text='PDB ID')
+    row_import.prop(scene, 'mol_pdb_code', text='PDB ID')
     row_import.operator('mol.import_protein_rcsb', text='Download', icon='IMPORT')
 
 
-def MOL_PT_panel_local(layout_function, ):
+def panel_local(layout_function, scene):
     col_main = layout_function.column(heading = '', align = False)
     col_main.alert = False
     col_main.enabled = True
     col_main.active = True
     col_main.label(text = "Open Local File")
     row_name = col_main.row(align = False)
-    row_name.prop(bpy.context.scene, 'mol_import_local_name', 
+    row_name.prop(scene, 'mol_import_local_name', 
                     text = "Name", icon_value = 0, emboss = True)
     row_name.operator('mol.import_protein_local', text = "Load", 
                         icon='FILE_TICK', emboss = True)
     row_import = col_main.row()
     row_import.prop(
-        bpy.context.scene, 'mol_import_local_path', 
+        scene, 'mol_import_local_path', 
         text = "File path", 
         icon_value = 0, 
         emboss = True
@@ -134,28 +128,28 @@ class MOL_OT_Import_Method_Selection(bpy.types.Operator):
         return not False
 
     def execute(self, context):
-        bpy.context.scene.mol_import_panel_selection = self.mol_interface_value
+        context.scene.mol_import_panel_selection = self.mol_interface_value
         return {"FINISHED"}
 
     def invoke(self, context, event):
         return self.execute(context)
 
-def MOL_change_import_interface(layout_function, label, interface_value, icon):
+def MOL_change_import_interface(layout, scene, label, interface_value, icon):
     if isinstance(icon, str):
-        op = layout_function.operator(
+        op = layout.operator(
             'mol.import_method_selection', 
             text = label, 
             icon = icon, 
             emboss = True, 
-            depress = interface_value == bpy.context.scene.mol_import_panel_selection
+            depress = interface_value == scene.mol_import_panel_selection
         )
     elif isinstance(icon, int):
-        op = layout_function.operator(
+        op = layout.operator(
             'mol.import_method_selection', 
             text = label, 
             icon_value = icon, 
             emboss = True, 
-            depress = interface_value == bpy.context.scene.mol_import_panel_selection
+            depress = interface_value == scene.mol_import_panel_selection
         )
     op.mol_interface_value = interface_value
 
@@ -171,7 +165,7 @@ class MOL_OT_Default_Style(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        bpy.context.scene.mol_import_default_style = self.panel_display
+        context.scene.mol_import_default_style = self.panel_display
         return {"FINISHED"}
 
 def default_style(layout, label, panel_display):
@@ -203,16 +197,16 @@ def MOL_PT_panel_ui(layout_function, scene):
     box = layout_function.box()
     grid = box.grid_flow(columns = 2)
     
-    grid.prop(bpy.context.scene, 'mol_import_center', 
+    grid.prop(scene, 'mol_import_center', 
                 text = 'Centre Structure', icon_value=0, emboss=True)
-    grid.prop(bpy.context.scene, 'mol_import_del_solvent', 
+    grid.prop(scene, 'mol_import_del_solvent', 
                 text = 'Delete Solvent', icon_value=0, emboss=True)
-    grid.prop(bpy.context.scene, 'mol_import_include_bonds', 
+    grid.prop(scene, 'mol_import_include_bonds', 
                 text = 'Import Bonds', icon_value=0, emboss=True)
     grid.menu(
         'MOL_MT_Default_Style', 
         text = ['Atoms', 'Cartoon', 'Ribbon', 'Ball and Stick'][
-            bpy.context.scene.mol_import_default_style
+            scene.mol_import_default_style
             ])
     panel = layout_function
     # row = panel.row(heading = '', align=True)
@@ -222,14 +216,14 @@ def MOL_PT_panel_ui(layout_function, scene):
     row.alert = False
     
     
-    MOL_change_import_interface(row, 'PDB',           0,  "URL")
-    MOL_change_import_interface(row, 'ESMFold',       1,  "URL")
-    MOL_change_import_interface(row, 'Local File',    2, 108)
-    MOL_change_import_interface(row, 'MD Trajectory', 3, 487)
-    MOL_change_import_interface(row, 'EM Map', 4, 'LIGHTPROBE_CUBEMAP')
-    MOL_change_import_interface(row, 'Star File',     5, 487)
+    MOL_change_import_interface(row, scene, 'PDB',           0,  "URL")
+    MOL_change_import_interface(row, scene, 'ESMFold',       1,  "URL")
+    MOL_change_import_interface(row, scene, 'Local File',    2, 108)
+    MOL_change_import_interface(row, scene, 'MD Trajectory', 3, 487)
+    MOL_change_import_interface(row, scene, 'EM Map', 4, 'LIGHTPROBE_CUBEMAP')
+    MOL_change_import_interface(row, scene, 'Star File',     5, 487)
     
-    panel_selection = bpy.context.scene.mol_import_panel_selection
+    panel_selection = scene.mol_import_panel_selection
     col = panel.column()
     box = col.box()
     
@@ -240,7 +234,7 @@ def MOL_PT_panel_ui(layout_function, scene):
             box.alert = True
             box.label(text = "Please install biotite in the addon preferences.")
         
-        MOL_PT_panel_rcsb(box)
+        panel_rcsb(box, scene)
     elif panel_selection == 1:
         if not pkg.is_current('biotite'):
             box.enabled = False
@@ -252,7 +246,7 @@ def MOL_PT_panel_ui(layout_function, scene):
             box.enabled = False
             box.alert = True
             box.label(text = "Please install biotite in the addon preferences.")
-        MOL_PT_panel_local(box)
+        panel_local(box, scene)
     elif panel_selection == 3:
         if not pkg.is_current('MDAnalysis'):
             box.enabled = False
@@ -290,15 +284,15 @@ class MOL_PT_panel(bpy.types.Panel):
         return not (False)
 
     def draw_header(self, context):
-        layout = self.layout
+        pass
 
     def draw(self, context):
         
-        MOL_PT_panel_ui(self.layout, bpy.context.scene)
+        MOL_PT_panel_ui(self.layout, context.scene)
 
-def mol_add_node(node_name, label: str = '', show_options = True):
-    prev_context = bpy.context.area.type
-    bpy.context.area.type = 'NODE_EDITOR'
+def mol_add_node(context, node_name, label: str = '', show_options = True):
+    prev_context = context.area.type
+    context.area.type = 'NODE_EDITOR'
     # actually invoke the operator to add a node to the current node tree
     # use_transform=True ensures it appears where the user's mouse is and is currently 
     # being moved so the user can place it where they wish
@@ -307,8 +301,8 @@ def mol_add_node(node_name, label: str = '', show_options = True):
         type='GeometryNodeGroup', 
         use_transform=True
         )
-    bpy.context.area.type = prev_context
-    node = bpy.context.active_node
+    context.area.type = prev_context
+    node = context.active_node
     node.node_tree = bpy.data.node_groups[node_name]
     node.width = 200.0
     node.show_options = show_options
@@ -316,7 +310,7 @@ def mol_add_node(node_name, label: str = '', show_options = True):
         node.label = label
     
     # if added node has a 'Material' input, set it to the default MN material
-    input_mat = bpy.context.active_node.inputs.get('Material')
+    input_mat = context.active_node.inputs.get('Material')
     if input_mat:
         input_mat.default_value = nodes.mol_base_material()
 
@@ -351,7 +345,7 @@ class MOL_OT_Add_Custom_Node_Group(bpy.types.Operator):
     def execute(self, context):
         try:
             nodes.mol_append_node(self.node_name)
-            mol_add_node(self.node_name, label=self.node_label)
+            mol_add_node(context, self.node_name, label=self.node_label)
         except RuntimeError:
             self.report({'ERROR'}, 
                         message='Failed to add node. Ensure you are not in edit mode.')
@@ -392,7 +386,7 @@ class MOL_OT_Style_Surface_Custom(bpy.types.Operator):
         except:
             node_surface = nodes.mol_append_node('MOL_style_surface_single')
             self.report({'WARNING'}, message = 'Unable to detect number of chains.')
-        mol_add_node(node_surface.name)
+        mol_add_node(context, node_surface.name)
         
         return {"FINISHED"}
 
@@ -424,14 +418,13 @@ class MOL_OT_Assembly_Bio(bpy.types.Operator):
             data_object = data_object
             )
         
-        mol_add_node(node_assembly.name)
+        mol_add_node(context, node_assembly.name)
         
         return {"FINISHED"}
 
 def menu_residues_selection_custom(layout_function):
-    obj = bpy.context.view_layer.objects.active
     label = 'Res ID'
-    op = layout_function.operator(
+    layout_function.operator(
         'mol.residues_selection_custom', 
         text = label, 
         emboss = True, 
@@ -439,7 +432,7 @@ def menu_residues_selection_custom(layout_function):
     )
 
 def menu_item_surface_custom(layout_function, label):
-    op = layout_function.operator('mol.style_surface_custom', 
+    layout_function.operator('mol.style_surface_custom', 
                                   text = label, 
                                   emboss = True, 
                                   depress = True)
@@ -482,7 +475,7 @@ class MOL_OT_Custom_Color_Node(bpy.types.Operator):
                 field = self.field, 
                 label_prefix= self.prefix
             )
-            mol_add_node(node_color.name)
+            mol_add_node(context, node_color.name)
         except:
             self.report({"WARNING"}, message = f"{self.node_propperty} not available for object.")
         return {"FINISHED"}
@@ -490,10 +483,10 @@ class MOL_OT_Custom_Color_Node(bpy.types.Operator):
     def invoke(self, context, event):
         return self.execute(context)
 
-def menu_chain_selection_custom(layout_function):
-    obj = bpy.context.view_layer.objects.active
+def menu_chain_selection_custom(layout, context):
+    obj = context.view_layer.objects.active
     label = 'Chain ' + str(obj.name)
-    op = layout_function.operator(
+    layout.operator(
         'mol.chain_selection_custom', 
         text = label, 
         emboss = True, 
@@ -518,7 +511,7 @@ class MOL_OT_Chain_Selection_Custom(bpy.types.Operator):
         return True
     
     def execute(self, context):
-        obj = bpy.context.view_layer.objects.active
+        obj = context.view_layer.objects.active
         node_chains = nodes.chain_selection(
             node_name = f'MOL_sel_{self.node_name}_{obj.name}',
             input_list = obj[self.node_property], 
@@ -527,7 +520,7 @@ class MOL_OT_Chain_Selection_Custom(bpy.types.Operator):
             label_prefix = self.prefix
             )
         
-        mol_add_node(node_chains.name)
+        mol_add_node(context, node_chains.name)
         
         return {"FINISHED"}
 
@@ -551,23 +544,22 @@ class MOL_OT_Residues_Selection_Custom(bpy.types.Operator):
         return True
     
     def execute(self, context):
-        obj = bpy.context.view_layer.objects.active
         node_residues = nodes.resid_multiple_selection(
             node_name = 'MOL_sel_residues', 
             input_resid_string = self.input_resid_string, 
             )
     
         
-        mol_add_node(node_residues.name)
+        mol_add_node(context, node_residues.name)
         return {"FINISHED"}
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
-def menu_ligand_selection_custom(layout_function):
-    obj = bpy.context.view_layer.objects.active
+def menu_ligand_selection_custom(layout, context):
+    obj = context.view_layer.objects.active
     label = 'Ligands ' + str(obj.name)
-    op = layout_function.operator(
+    layout.operator(
         'mol.ligand_selection_custom', 
         text = label, 
         emboss = True, 
@@ -587,7 +579,7 @@ class MOL_OT_Ligand_Selection_Custom(bpy.types.Operator):
         return True
     
     def execute(self, context):
-        obj = bpy.context.view_layer.objects.active
+        obj = context.view_layer.objects.active
         node_chains = nodes.chain_selection(
             node_name = 'MOL_sel_' + str(obj.name) + "_ligands", 
             input_list = obj['ligands'], 
@@ -596,7 +588,7 @@ class MOL_OT_Ligand_Selection_Custom(bpy.types.Operator):
             label_prefix = ""
             )
         
-        mol_add_node(node_chains.name)
+        mol_add_node(context, node_chains.name)
         
         return {"FINISHED"}
 
@@ -683,8 +675,8 @@ class MOL_MT_Add_Node_Menu_Bonds(bpy.types.Menu):
                             "Based on an initial selection, finds atoms which are \
                             within a certain number of bonds away")
 
-class MOL_MT_Add_Node_Menu_Styling(bpy.types.Menu):
-    bl_idname = 'MOL_MT_ADD_NODE_MENU_SYLING'
+class MOL_MT_Add_Node_Menu_Style(bpy.types.Menu):
+    bl_idname = 'MOL_MT_ADD_NODE_MENU_STYLE'
     bl_label = ''
     
     @classmethod
@@ -722,8 +714,8 @@ class MOL_MT_Add_Node_Menu_Styling(bpy.types.Menu):
                             Bonds can be detected if they are not present in the \
                             structure")
 
-class MOL_MT_Add_Node_Menu_Selections(bpy.types.Menu):
-    bl_idname = 'MOL_MT_ADD_NODE_MENU_SELECTIONS'
+class MOL_MT_Add_Node_Menu_Selection(bpy.types.Menu):
+    bl_idname = 'MOL_MT_ADD_NODE_MENU_SELECTION'
     bl_label = ''
     
     @classmethod
@@ -741,7 +733,7 @@ class MOL_MT_Add_Node_Menu_Selections(bpy.types.Menu):
                             "Separate the Geometry into the different polymers.\n" + 
                             "Outputs for protein, nucleic & sugars")
         layout.separator()
-        menu_chain_selection_custom(layout)
+        menu_chain_selection_custom(layout, context)
         op = layout.operator('mol.chain_selection_custom', text = 'Chain Selection')
         op.field = 'chain_id'
         op.prefix = 'Chain '
@@ -754,7 +746,7 @@ class MOL_MT_Add_Node_Menu_Selections(bpy.types.Menu):
         op.node_property = 'entity_names'
         op.field = 'entity_id'
         op.node_name = 'entity'
-        menu_ligand_selection_custom(layout)
+        menu_ligand_selection_custom(layout, context)
         layout.separator()
         menu_item_interface(layout, 'Backbone', 'MOL_sel_backbone', 
                             "Select atoms it they are part of the side chains or backbone.")
@@ -941,7 +933,7 @@ class MOL_MT_Add_Node_Menu(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout.column_flow(columns=1)
         layout.operator_context = "INVOKE_DEFAULT"
-        layout.menu('MOL_MT_ADD_NODE_MENU_SYLING', 
+        layout.menu('MOL_MT_ADD_NODE_MENU_STYLE', 
                     text='Style', icon_value=77)
         layout.menu('MOL_MT_ADD_NODE_MENU_COLOR', 
                     text='Color', icon = 'COLORSET_07_VEC')
@@ -949,7 +941,7 @@ class MOL_MT_Add_Node_Menu(bpy.types.Menu):
                     text = "Density")
         layout.menu('MOL_MT_ADD_NODE_MENU_BONDS', 
                     text='Bonds', icon = 'FIXED_SIZE')
-        layout.menu('MOL_MT_ADD_NODE_MENU_SELECTIONS', 
+        layout.menu('MOL_MT_ADD_NODE_MENU_SELECTION', 
                     text='Selection', icon_value=256)
         layout.menu('MOL_MT_ADD_NODE_MENU_ANIMATION', 
                     text='Animation', icon_value=409)
@@ -961,6 +953,6 @@ class MOL_MT_Add_Node_Menu(bpy.types.Menu):
                     text='Utilities', icon_value=92)
 
 def mol_add_node_menu(self, context):
-    if ('GeometryNodeTree' == bpy.context.area.spaces[0].tree_type):
+    if ('GeometryNodeTree' == context.area.spaces[0].tree_type):
         layout = self.layout
         layout.menu('MOL_MT_ADD_NODE_MENU', text='Molecular Nodes', icon_value=88)

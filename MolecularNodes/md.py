@@ -221,9 +221,9 @@ def load_trajectory(file_top, file_traj, name="NewTrajectory", md_start=0, md_en
     # create the initial model
     mol_object = obj.create_object(
         name = name,
-        collection = coll.mn(),
         locations = univ.atoms.positions * world_scale, 
-        bonds = bonds
+        edges = bonds,
+        collection = coll.mn(),
     )
     
     ## add the attributes for the model
