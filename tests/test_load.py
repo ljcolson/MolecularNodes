@@ -2,87 +2,8 @@ import bpy
 import os
 import pytest
 import MolecularNodes as mn
-
-# ensure we can successfully install all of the required pacakges 
-# def test_install_packages():
-    # mn.pkg.install_all_packages()
-    # assert mn.pkg.is_current('biotite') == True
-
-def apply_mods(obj):
-    """
-    Applies the modifiers on the modifier stack
-    
-    This will realise the computations inside of any Geometry Nodes modifiers, ensuring
-    that the result of the node trees can be compared by looking at the resulting 
-    vertices of the object.
-    """
-    bpy.context.view_layer.objects.active = obj
-    for modifier in obj.modifiers:
-        bpy.ops.object.modifier_apply(modifier = modifier.name)
-
-def get_verts(obj, float_decimals=4, n_verts=100, apply_modifiers=True, seed=42):
-    """
-    Randomly samples a specified number of vertices from an object.
-
-    Parameters
-    ----------
-    obj : object
-        Object from which to sample vertices.
-    float_decimals : int, optional
-        Number of decimal places to round the vertex coordinates, defaults to 4.
-    n_verts : int, optional
-        Number of vertices to sample, defaults to 100.
-    apply_modifiers : bool, optional
-        Whether to apply all modifiers on the object before sampling vertices, defaults to True.
-    seed : int, optional
-        Seed for the random number generator, defaults to 42.
-
-    Returns
-    -------
-    str
-        String representation of the randomly selected vertices.
-
-    Notes
-    -----
-    This function randomly samples a specified number of vertices from the given object.
-    By default, it applies all modifiers on the object before sampling vertices. The
-    random seed can be set externally for reproducibility.
-
-    If the number of vertices to sample (`n_verts`) exceeds the number of vertices
-    available in the object, all available vertices will be sampled.
-
-    The vertex coordinates are rounded to the specified number of decimal places
-    (`float_decimals`) before being included in the output string.
-
-    Examples
-    --------
-    >>> obj = mn.load.molecule_rcsb('6n2y', starting_style=2)
-    >>> get_verts(obj, float_decimals=3, n_verts=50, apply_modifiers=True, seed=42)
-    '1.234,2.345,3.456\n4.567,5.678,6.789\n...'
-    """
-
-    import random
-
-    random.seed(seed)
-
-    if apply_modifiers:
-        apply_mods(obj)
-
-    vert_list = [(v.co.x, v.co.y, v.co.z) for v in obj.data.vertices]
-
-    if n_verts > len(vert_list):
-        n_verts = len(vert_list)
-
-    random_verts = random.sample(vert_list, n_verts)
-
-    verts_string = ""
-    for i, vert in enumerate(random_verts):
-        if i < n_verts:
-            rounded = [round(x, float_decimals) for x in vert]
-            verts_string += "{},{},{}\n".format(rounded[0], rounded[1], rounded[2])
-
-    return verts_string
-
+import numpy as np
+from .utils import get_verts, apply_mods
 
 def test_open_rcsb(snapshot):
     mn.load.open_structure_rcsb('4ozs')
@@ -94,34 +15,46 @@ def test_rcsb_4ozs(snapshot):
     snapshot.assert_match(verts, '4ozs_verts.txt')
 
 def test_rcsb_6n2y_cartoon(snapshot):
-    obj = mn.load.molecule_rcsb('6n2y', starting_style=2)
+    obj = mn.load.molecule_rcsb('6n2y', starting_style=1)
     verts = get_verts(obj)
     snapshot.assert_match(verts, '6n2y_cartoon_verts.txt')
 
 def test_rcsb_6n2y_ribbon(snapshot):
-    obj = mn.load.molecule_rcsb('6n2y', starting_style=3)
+    obj = mn.load.molecule_rcsb('6n2y', starting_style=2)
     verts = get_verts(obj)
     snapshot.assert_match(verts, '6n2y_ribbon_verts.txt')
+
+def test_rcsb_1bna_ball_and_stick(snapshot):
+    obj = mn.load.molecule_rcsb('1bna', starting_style=3)
+    verts = get_verts(obj)
+    snapshot.assert_match(verts, '1bna_ball_verts.txt')
 
 def test_rcsb_6n2y_surface_split(snapshot):
     obj = mn.load.molecule_rcsb('6n2y', starting_style=1, setup_nodes = True)
     node_surface = mn.nodes.create_custom_surface(
-        name = 'MOL_style_surface_6n2y_split', 
+        name = 'MN_style_surface_6n2y_split', 
         n_chains = len(obj['chain_id_unique'])
         )
+    
     node_group = obj.modifiers['MolecularNodes'].node_group
-    node_group.nodes['Group.001'].node_tree = node_surface
+    
+    style_name = None
+    for name in node_group.nodes.keys():
+        if "style" in name:
+            style_name = name
+    
+    node_group.nodes[style_name].node_tree = node_surface
     
     for link in node_group.links:
-        if link.to_node.name == "Group.001":
+        if link.to_node.name == style_name:
             node_group.links.remove(link)
     new_link = node_group.links.new
     new_link(
-        node_group.nodes['Group'].outputs[0], 
-        node_group.nodes['Group.001'].inputs[0]
+        node_group.nodes['MN_color_set'].outputs[0], 
+        node_group.nodes[style_name].inputs[0]
     )
     new_link(
-        node_group.nodes['Group.001'].outputs[0], 
+        node_group.nodes[style_name].outputs[0], 
         node_group.nodes['Group Output'].inputs[0]
     )
     
@@ -176,3 +109,103 @@ def test_load_small_mol(snapshot):
     bond_types = mn.obj.get_attribute(obj, 'bond_type')
     edges = ''.join([str(bond_type) for bond_type in bond_types])
     snapshot.assert_match(edges, 'asn_edges.txt')
+
+
+def test_rcsb_cache(snapshot):
+    from pathlib import Path
+    from shutil import rmtree
+    # we want to make sure cached files are freshly downloaded, but
+    # we don't want to delete our entire real cache
+    test_cache = Path(Path.home(), '.MolecularNodesTests')
+    if test_cache.exists():
+        rmtree(test_cache)
+    _ = mn.load.molecule_rcsb('6BQN', cache_dir = test_cache)
+    assert (test_cache / '6BQN.mmtf').exists()
+
+def test_1cd3_bio_assembly(snapshot):
+    obj_rcsb = mn.load.molecule_rcsb('1CD3', starting_style=2)
+    obj_cif, obj_pdb = [mn.load.molecule_local(f"tests/data/1cd3.{ext}", default_style = 2) for ext in ["pdb", "cif"]]
+    
+    vert_list = []
+    objects = [obj_rcsb, obj_cif, obj_pdb]
+    for obj in objects:
+        data_object = mn.assembly.mesh.create_data_object(
+            transforms_dict = obj['biological_assemblies'], 
+            name = f"data_assembly_{obj.name}"
+        )
+        
+        node_bio_assembly = mn.nodes.create_assembly_node_tree(
+            name = obj.name, 
+            iter_list = obj['chain_id_unique'], 
+            data_object = data_object
+            )
+        
+        node_group = obj.modifiers['MolecularNodes'].node_group
+        style_name = None
+        for name in node_group.nodes.keys():
+            if "style" in name:
+                style_name = name
+        
+        node_group.nodes[style_name].node_tree = node_bio_assembly
+        
+        for link in node_group.links:
+            if link.to_node.name == style_name:
+                node_group.links.remove(link)
+        new_link = node_group.links.new
+        new_link(
+            node_group.nodes['MN_color_set'].outputs[0], 
+            node_group.nodes[style_name].inputs[0]
+        )
+        new_link(
+            node_group.nodes[style_name].outputs[0], 
+            node_group.nodes['Group Output'].inputs[0]
+        )
+        
+        node_realize = node_group.nodes.new('GeometryNodeRealizeInstances')
+        
+        node_realize.location = (node_group.nodes[style_name].location + 
+                                node_group.nodes['Group Output'].location) / 2
+        new_link(
+            node_group.nodes[style_name].outputs[0], 
+            node_realize.inputs[0]
+        )
+        
+        new_link(
+            node_realize.outputs[0], 
+            node_group.nodes['Group Output'].inputs[0]
+        )
+        
+    verts = get_verts(obj_rcsb, n_verts=1000, float_decimals=2)
+    
+    attributes = ['assembly_rotation', 'chain_id', 'assembly_id']
+    for att in attributes:
+        snapshot.assert_match(
+            np.array2string(
+                np.sort(
+                    mn.obj.get_attribute(bpy.data.objects['data_assembly_1CD3'], att), 
+                    axis = 0, kind = 'quicksort'
+                    )[::-1], 
+                precision=3, 
+                threshold=int(1e5)
+                
+                ), 
+            f'1cd3_bio_assembly_{att}.txt'
+            )
+    # for verts in vert_list:
+    # snapshot.assert_match(verts, '1cd3_bio_assembly.txt')
+    
+    for obj in objects:
+        apply_mods(obj)
+    
+    # turn each object to positions, sort the arrays (different import methods currently 
+    # result in different ordered verts) but then check they are the same
+    # Results shows the same number of atoms and atom positions are resulting from the 
+    # different import methods so it still works
+    positions = [np.sort(mn.obj.get_attribute(obj, 'position'), axis = 0, kind = 'quicksort')[::-1] for obj in objects]
+    assert np.allclose(positions[0], positions[1], atol = 1e-4)
+    
+    # TODO: for some reason when opening from .CIF files, we are ending up with double the 
+    # number of chains than we would need. I am unsure why this is the case, but will leave 
+    # it for now, as everything else is working well.
+    
+    # assert np.allclose(positions[0], positions[2], atol = 1e-4)

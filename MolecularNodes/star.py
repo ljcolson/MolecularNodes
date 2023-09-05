@@ -3,9 +3,11 @@ import numpy as np
 from . import coll
 from . import nodes
 from .obj import create_object
+from .obj import add_attribute
 
 
-bpy.types.Scene.mol_import_star_file_path = bpy.props.StringProperty(
+
+bpy.types.Scene.MN_import_star_file_path = bpy.props.StringProperty(
     name = 'star_file_path', 
     description = 'File path for the star file to import.', 
     options = {'TEXTEDIT_UPDATE'}, 
@@ -13,7 +15,7 @@ bpy.types.Scene.mol_import_star_file_path = bpy.props.StringProperty(
     subtype = 'FILE_PATH', 
     maxlen = 0
     )
-bpy.types.Scene.mol_import_star_file_name = bpy.props.StringProperty(
+bpy.types.Scene.MN_import_star_file_name = bpy.props.StringProperty(
     name = 'star_file_name', 
     description = 'Name of the created object.', 
     options = {'TEXTEDIT_UPDATE'}, 
@@ -59,11 +61,11 @@ def load_star_file(
             
         xyz = df[['rlnCoordinateX', 'rlnCoordinateY', 'rlnCoordinateZ']].to_numpy()
         pixel_size = df['rlnImagePixelSize'].to_numpy().reshape((-1, 1))
-        xyz *= pixel_size
+        xyz = xyz * pixel_size
         shift_column_names = ['rlnOriginXAngst', 'rlnOriginYAngst', 'rlnOriginZAngst']
         if all([col in df.columns for col in shift_column_names]):
             shifts_ang = df[shift_column_names].to_numpy()
-            xyz -= shifts_ang 
+            xyz = xyz - shifts_ang 
         euler_angles = df[['rlnAngleRot', 'rlnAngleTilt', 'rlnAnglePsi']].to_numpy()
         image_id = df['rlnMicrographName'].astype('category').cat.codes.to_numpy()
         
@@ -87,28 +89,24 @@ def load_star_file(
                                target_meta=target_metadata))
 
     obj = create_object(obj_name, coll.mn(), xyz * world_scale)
-    
-    # vectors have to be added as a 1D array currently
-    rotations = eulers.reshape(len(eulers) * 3)
+
     # create the attribute and add the data for the rotations
-    attribute = obj.data.attributes.new('MOLRotation', 'FLOAT_VECTOR', 'POINT')
-    attribute.data.foreach_set('vector', rotations)
+    add_attribute(obj, 'MOLRotation', eulers, 'FLOAT_VECTOR', 'POINT')
 
     # create the attribute and add the data for the image id
-    attribute_imgid = obj.data.attributes.new('MOLImageId', 'INT', 'POINT')
-    attribute_imgid.data.foreach_set('value', image_id)
+    add_attribute(obj, 'MOLIMageId', image_id, 'INT', 'POINT')
+    
     # create attribute for every column in the STAR file
     for col in df.columns:
-        col_type = df[col].dtype
+        col_type = df[col].dtype    
         # If col_type is numeric directly add
         if np.issubdtype(col_type, np.number):
-            attribute = obj.data.attributes.new(col, 'FLOAT', 'POINT')
-            attribute.data.foreach_set('value', df[col].to_numpy().reshape(-1))
+            add_attribute(obj, col, df[col].to_numpy().reshape(-1), 'FLOAT', 'POINT')
+        
         # If col_type is object, convert to category and add integer values
         elif col_type == object:
-            attribute = obj.data.attributes.new(col, 'INT', 'POINT')
-            codes = df[col].astype('category').cat.codes
-            attribute.data.foreach_set('value', codes.to_numpy().reshape(-1))
+            codes = df[col].astype('category').cat.codes.to_numpy().reshape(-1)
+            add_attribute(obj, col, codes, 'INT', 'POINT')
             # Add the category names as a property to the blender object
             obj[col + '_categories'] = list(df[col].astype('category').cat.categories)
     
@@ -123,21 +121,21 @@ def panel(layout_function, scene):
     col_main.label(text = "Import Star File")
     row_import = col_main.row()
     row_import.prop(
-        bpy.context.scene, 'mol_import_star_file_name', 
+        bpy.context.scene, 'MN_import_star_file_name', 
         text = 'Name', 
         emboss = True
     )
     col_main.prop(
-        bpy.context.scene, 'mol_import_star_file_path', 
+        bpy.context.scene, 'MN_import_star_file_path', 
         text = '.star File Path', 
         emboss = True
     )
-    row_import.operator('mol.import_star_file', text = 'Load', icon = 'FILE_TICK')
+    row_import.operator('mn.import_star_file', text = 'Load', icon = 'FILE_TICK')
 
 
 
-class MOL_OT_Import_Star_File(bpy.types.Operator):
-    bl_idname = "mol.import_star_file"
+class MN_OT_Import_Star_File(bpy.types.Operator):
+    bl_idname = "mn.import_star_file"
     bl_label = "Import Star File"
     bl_description = "Will import the given file, setting up the points to instance an object."
     bl_options = {"REGISTER"}
@@ -148,8 +146,8 @@ class MOL_OT_Import_Star_File(bpy.types.Operator):
 
     def execute(self, context):
         load_star_file(
-            file_path = bpy.context.scene.mol_import_star_file_path, 
-            obj_name = bpy.context.scene.mol_import_star_file_name, 
+            file_path = bpy.context.scene.MN_import_star_file_path, 
+            obj_name = bpy.context.scene.MN_import_star_file_name, 
             node_tree = True
         )
         return {"FINISHED"}
