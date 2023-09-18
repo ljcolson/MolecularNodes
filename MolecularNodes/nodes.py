@@ -630,16 +630,15 @@ def chain_selection(node_name, input_list, attribute = 'chain_id', starting_valu
     for chain_name in input_list: 
         # create a boolean input for the name, and name it whatever the chain chain name is
         chain_group.inputs.new("NodeSocketBool", str(label_prefix) + str(chain_name))
-    # shortcut for creating new nodes
-    new_node = chain_group.nodes.new
     # distance horizontally to space all of the created nodes
     node_sep_dis = 180
     counter = 0
-    for chain_name in input_list:
+    previous_node = None
+    for i, chain_name in enumerate(input_list):
         current_node = chain_group.nodes.new("GeometryNodeGroup")
         current_node.node_tree = append('.MN_utils_bool_chain')
-        current_node.location = [counter * node_sep_dis, 200]
-        current_node.inputs["number_matched"].default_value = counter + starting_value
+        current_node.location = [i * node_sep_dis, 200]
+        current_node.inputs["number_matched"].default_value = i + starting_value
         group_link = chain_group.links.new
         # link from the the named attribute node chain_number into the other inputs
         if counter == 0:
@@ -652,12 +651,13 @@ def chain_selection(node_name, input_list, attribute = 'chain_id', starting_valu
                     group_link(chain_number_node.outputs[i], current_node.inputs['number_chain_in'])
                 except:
                     pass
-        group_link(chain_group_in.outputs[counter], current_node.inputs["bool_include"])
-        if counter > 0:
+        group_link(chain_group_in.outputs[i], current_node.inputs["bool_include"])
+        if previous_node:
             group_link(previous_node.outputs['number_chain_out'], current_node.inputs['number_chain_in'])
             group_link(previous_node.outputs['bool_chain_out'], current_node.inputs['bool_chain_in'])
         previous_node = current_node
         counter += 1
+    
     chain_group_out = chain_group.nodes.new("NodeGroupOutput")
     chain_group_out.location = [(counter + 1) * node_sep_dis, 200]
     chain_group.outputs.new("NodeSocketBool", "Selection")
@@ -694,17 +694,14 @@ def chain_color(node_name, input_list, label_prefix = "Chain ", field = "chain_i
     
     obj.modifiers.active = node_mod
     
-    
     # create the custom node group data block, where everything will go
     # also create the required group node input and position it
     chain_group = bpy.data.node_groups.new(node_name, "GeometryNodeTree")
     node_input = chain_group.nodes.new("NodeGroupInput")
     node_input.location = [-200, 0]
     
-    
     # link shortcut for creating links between nodes
     link = chain_group.links.new
-    
     
     # create a named attribute node that gets the chain_number attribute
     # and use this for the selection algebra that happens later on
@@ -718,10 +715,10 @@ def chain_color(node_name, input_list, label_prefix = "Chain ", field = "chain_i
     new_node = chain_group.nodes.new
     # distance horizontally to space all of the created nodes
     node_sep_dis = 180
-    counter = starting_value
+    node_color_previous = None
     
-    for chain_name in input_list:
-        offset = counter * node_sep_dis
+    for i, chain_name in enumerate(input_list):
+        offset = i * node_sep_dis
         current_chain = f"{label_prefix}{chain_name}"
         
         # node compare inputs 2 & 3
@@ -730,7 +727,7 @@ def chain_color(node_name, input_list, label_prefix = "Chain ", field = "chain_i
         node_compare.location = [offset, 100]
         node_compare.operation = 'EQUAL'
         
-        node_compare.inputs[3].default_value = counter
+        node_compare.inputs[3].default_value = i + starting_value
         
         # link the named attribute to the compare
         link(chain_number_node.outputs[4], node_compare.inputs[2])
@@ -741,17 +738,15 @@ def chain_color(node_name, input_list, label_prefix = "Chain ", field = "chain_i
         
         # create an input for this chain
         chain_group.inputs.new("NodeSocketColor", current_chain)
-        chain_group.inputs[current_chain].default_value = color.random_rgb()
+        chain_group.inputs[i].default_value = color.random_rgb()
         # switch input colours 10 and 11
-        link(node_input.outputs[current_chain], node_color.inputs[11])
+        link(node_input.outputs[i], node_color.inputs[11])
         link(node_compare.outputs['Result'], node_color.inputs['Switch'])
         
-        
-        if counter > starting_value:
+        if node_color_previous:
             link(node_color_previous.outputs[4], node_color.inputs[10])
         
         node_color_previous = node_color
-        counter += 1
     chain_group.outputs.new("NodeSocketColor", "Color")
     node_output = chain_group.nodes.new("NodeGroupOutput")
     node_output.location = [offset, 200]
